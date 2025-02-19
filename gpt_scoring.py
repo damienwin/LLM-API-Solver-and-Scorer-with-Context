@@ -48,8 +48,8 @@ def gpt_grading():
 
     # Extract questions and Llama's responses
     for entry in gpt_data:
-        question = entry["question"]
-        response_content = entry["response"]
+        question = entry["custom_id"].replace("question=", "")
+        response_content = entry["response"]["body"]["choices"][0]["message"]["content"]
         gpt_answers.append({
             "question": question,
             "response": response_content
@@ -97,7 +97,7 @@ def gpt_grading():
             "method": "POST",
             "url": "/v1/chat/completions",
             "body": {
-                "model": "gpt-4o",
+                "model": "gpt-4o-mini",
                 "temperature": 0.2,
                 "messages": messages,
                 }

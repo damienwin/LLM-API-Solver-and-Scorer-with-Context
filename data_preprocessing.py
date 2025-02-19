@@ -12,7 +12,7 @@ def preprocessing():
         data = json.load(f)
 
     # Establish client
-    chroma_client = chromadb.PersistentClient(path="../data/my_chromadb")
+    chroma_client = chromadb.PersistentClient(path="data/my_chromadb")
 
     openai_ef = embedding_functions.OpenAIEmbeddingFunction(
         api_key=os.getenv("OPENAI_API_KEY"),
@@ -39,6 +39,7 @@ def preprocessing():
             )
             # Increment the counter
             id_counter += 1
+            print(f"Successfully added {id_counter}")
 
     print(f"Successfully stored {id_counter} context chunks in the Chroma database.")
 

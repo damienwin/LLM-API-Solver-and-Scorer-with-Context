@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 import chromadb
 from chromadb.utils import embedding_functions
 
-load_dotenv('.env')
+load_dotenv()
 
 openai_client = ChatCompletionsClient(
     endpoint=os.environ["AZURE_MLSTUDIO_ENDPOINT"],
@@ -46,8 +46,6 @@ Here is the question: {question}
 Your response: """
 
 def retrieve_context(idx, question, n_results=5):
-    print(f"Retrieving most relevant contexts for the question: {idx}")
-
     results = collection.query(query_texts=[question], n_results=n_results)
     return results["documents"][0]
 
@@ -63,74 +61,53 @@ def possible_questions():
                     valid_responses.append(qa["question"])
                 if len(valid_responses) >= 500:
                     return valid_responses
-    return valid_responses
 
 def llama_answers(questions):
-    tasks = []
-    for idx, question in enumerate(questions):
-        context_chunks = retrieve_context(idx, question, n_results=5)
-        context = "\n\n".join(context_chunks)
+    """
+    Generate answers using the Llama model via Azure's ChatCompletionsClient.
 
-        formatted_user_prompt = user_prompt.format(context=context, question=question)
+    This function reads questions from 'dev-v2.0.json', submits each question to the Llama model,
+    and appends the responses to 'llama8Boutput.json'.
+    """
+    client = ChatCompletionsClient(
+        endpoint=os.environ["AZURE_MLSTUDIO_ENDPOINT"],
+        credential=AzureKeyCredential(os.environ["AZURE_MLSTUDIO_KEY"]),
+    )
 
-        task = {
-            "custom_id": f"question={question}",
-            "method": "POST",
-            "url": "/v1/chat/completions",
-            "body": {
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": formatted_user_prompt}
-                ]
+    # Open the output file in append mode
+    with open('data/llama_output.json', 'a') as output_file:
+        for idx, question in enumerate(questions, 1):
+            # Submit the question to the Llama model
+            context_chunks = retrieve_context(idx, question, n_results=5)
+            context = "\n\n".join(context_chunks)
+
+            formatted_user_prompt = user_prompt.format(context=context, question=question)
+
+            response = client.complete(
+                messages=[
+                    SystemMessage(
+                        content=system_prompt,
+                    ),
+                    UserMessage(content=formatted_user_prompt),
+                ],
+            )
+            # Structure the result
+            result = {
+                "question": question,
+                "response": response.choices[0].message.content,
+                "input_tokens": response.usage.prompt_tokens,
+                "output_tokens": response.usage.completion_tokens
             }
-        }
-        tasks.append(task)
 
-    # Write tasks to JSON file for batch processing
-    with open("data/llama_input_batch.jsonl", 'w') as jf:
-        for task in tasks:
-            jf.write(json.dumps(task) + '\n')
+            print(f"{idx} / {len(questions)} Questions answered: {question}")
+            output_file.write(json.dumps(result) + '\n')
 
-    # Upload the batch file to OpenAI
-    batch_file = openai_client.files.create(
-        file=open("data/llama_input_batch.jsonl", 'rb'),
-        purpose='batch'
-    )
-
-    # Run the batch job
-    batch_job = openai_client.batches.create(
-        input_file_id=batch_file.id,
-        endpoint="/v1/chat/completions",
-        completion_window="24h"
-    )
-
-    # Wait for the batch job to complete
-    complete = False
-    while not complete:
-        check = openai_client.batches.retrieve(batch_job.id)
-        print(f'Status: {check.status}')
-        if check.status == 'completed':
-            complete = True
-        time.sleep(1)
-
-    print("Batch processing complete.")
-
-    result = openai_client.files.content(check.output_file_id).content
-    answered_questions = "data/llama_output.json"
-    with open(answered_questions, 'wb') as file:
-        file.write(result)
-
-    res = []
-    with open(answered_questions, 'r') as file:
-        for line in file:
-            json_object = json.loads(line.strip())
-            res.append(json_object)
-
-    return res
+    print("Model's Response:")
+    print('\t', response.choices[0].message.content)
+    print()
+    print(f"Input Tokens:  {response.usage.prompt_tokens}")
+    print(f"Output Tokens: {response.usage.completion_tokens}")
+    print(f"Cost: ${response.usage.prompt_tokens * 0.0003 / 1000 + response.usage.completion_tokens * 0.00061 / 1000}")
 
 questions = possible_questions()
-results = llama_answers(questions)
-
-for item in results:
-    print("Model's Response:")
-    print('\t', item['response']['body']['choices'][0]['message']['content'])
+llama_answers(questions)

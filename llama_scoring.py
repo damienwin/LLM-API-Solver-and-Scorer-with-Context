@@ -97,7 +97,7 @@ def llama_grading():
             "method": "POST",
             "url": "/v1/chat/completions",
             "body": {
-                "model": "gpt-4o",
+                "model": "gpt-4o-mini",
                 "temperature": 0.2,
                 "messages": messages,
             }

@@ -1,6 +1,6 @@
 import json
 
-for task in ['data/gpt_scoring_results.jsonl', 'data/llama_scoring_results.jsonl']:
+for task in ['data/gpt4o_scoring_results.jsonl', 'data/llama_scoring_results.jsonl']:
     with open(task, 'r') as file:
         data = [json.loads(line) for line in file]
 
